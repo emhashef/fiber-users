@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>جستجوی مشتریان فیبر نوری</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vazirmatn/33.0.3/Vazirmatn-font-face.min.css">
+<style>
+  :root{
+    --ink:#1a2b3c;
+    --ink-soft:#5b6b7b;
+    --bg:#f2f5f8;
+    --card:#ffffff;
+    --line:#dfe6ec;
+    --accent:#0b7d8a;
+    --accent-soft:#e2f2f4;
+    --ok:#1d8a4e;  --ok-bg:#e4f4ea;
+    --bad:#c0392b; --bad-bg:#fbe9e7;
+    --warn:#a06a00;--warn-bg:#fdf3dd;
+    --fat:#123c5a; --fat-bg:#e8f0f7;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Vazirmatn',Tahoma,sans-serif;
+    background:var(--bg);color:var(--ink);
+    min-height:100vh;font-size:15px;
+  }
+  body.locked{overflow:hidden}
+  header{
+    background:linear-gradient(135deg,#0b3d4a,#0b7d8a);
+    color:#fff;padding:14px 16px 10px;
+  }
+  header h1{font-size:17px;font-weight:800;display:flex;align-items:center;gap:8px}
+  header .sub{font-size:12px;opacity:.85;margin-top:2px}
+  #reloadBtn{
+    background:none;border:none;color:#cde9ec;font-family:inherit;
+    font-size:12px;text-decoration:underline;cursor:pointer;padding:0;margin-top:4px;display:none;
+  }
+
+  .tabs{display:none;background:linear-gradient(135deg,#0b3d4a,#0b7d8a);padding:0 12px;gap:4px}
+  .tabs button{
+    flex:1;font-family:inherit;font-size:14px;font-weight:700;
+    background:rgba(255,255,255,.12);color:#d8eef1;
+    border:none;border-radius:12px 12px 0 0;padding:10px 8px;cursor:pointer;
+  }
+  .tabs button.active{background:var(--bg);color:var(--accent)}
+
+  .searchbar{
+    position:sticky;top:0;z-index:20;background:var(--bg);
+    padding:10px 12px 8px;border-bottom:1px solid var(--line);
+  }
+  .search-wrap{position:relative}
+  .search-wrap>svg{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--ink-soft)}
+  .search-wrap input{
+    width:100%;padding:12px 42px 12px 40px;
+    border:1.5px solid var(--line);border-radius:14px;
+    font-family:inherit;font-size:16px;background:var(--card);outline:none;
+  }
+  .search-wrap input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .clear-x{
+    position:absolute;left:6px;top:50%;transform:translateY(-50%);
+    border:none;background:var(--line);color:var(--ink-soft);
+    width:28px;height:28px;border-radius:50%;
+    font-size:16px;line-height:1;cursor:pointer;display:none;
+  }
+  .filters{display:flex;gap:8px;margin-top:8px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+  .filters select{
+    flex:none;font-family:inherit;font-size:13px;padding:7px 10px;
+    border:1.5px solid var(--line);border-radius:10px;
+    background:var(--card);color:var(--ink);max-width:46vw;
+  }
+  .count{font-size:12px;color:var(--ink-soft);margin-top:7px}
+  .count b{color:var(--accent)}
+
+  .loader{
+    margin:26px 16px;background:var(--card);
+    border:2px dashed var(--accent);border-radius:18px;
+    padding:34px 20px;text-align:center;
+  }
+  .loader p{color:var(--ink-soft);font-size:13.5px;margin-top:8px;line-height:1.9}
+  .pickBtn{
+    display:inline-flex;align-items:center;gap:8px;
+    background:var(--accent);color:#fff;border:none;border-radius:12px;
+    font-family:inherit;font-size:15.5px;font-weight:700;padding:13px 26px;cursor:pointer;
+  }
+  .pickBtn:active{transform:scale(.97)}
+  #fileInput{display:none}
+  #loadErr{color:var(--bad);font-size:13px;margin-top:10px;display:none}
+
+  /* کارت فشرده مشترک (تب جستجو) */
+  #list{padding:10px 12px 60px;display:flex;flex-direction:column;gap:7px}
+  .card{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:11px;padding:8px 10px;box-shadow:0 1px 2px rgba(20,40,60,.04);
+  }
+  .card .top{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .card .name{font-size:14px;font-weight:800;flex:1;min-width:120px}
+  .card .row-num{font-size:10px;color:var(--ink-soft);flex:none;background:var(--bg);border-radius:5px;padding:1px 6px}
+  .badge{
+    display:inline-block;font-size:10.5px;font-weight:700;
+    border-radius:6px;padding:1px 7px;flex:none;background:#eceff2;color:var(--ink-soft);
+  }
+  .badge.ok{background:var(--ok-bg);color:var(--ok)}
+  .badge.bad{background:var(--bad-bg);color:var(--bad)}
+  .badge.warn{background:var(--warn-bg);color:var(--warn)}
+  .line2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px}
+  .phone{
+    display:inline-flex;align-items:center;gap:5px;
+    color:var(--accent);font-weight:700;font-size:13.5px;
+    text-decoration:none;direction:ltr;
+  }
+  .fatchip{
+    background:var(--fat-bg);color:var(--fat);
+    font-size:11px;font-weight:800;border-radius:6px;padding:2px 7px;
+    direction:ltr;letter-spacing:.2px;
+  }
+  .fatchip small{font-weight:500;opacity:.75;letter-spacing:0}
+  .addr{font-size:12px;color:var(--ink-soft);margin-top:5px;line-height:1.7}
+  .geo{font-size:11px;color:var(--ink-soft);margin-top:4px}
+  .geo span{background:var(--bg);border-radius:5px;padding:1px 6px;margin-left:4px;display:inline-block;margin-top:3px}
+  mark{background:#ffe58a;border-radius:3px;padding:0 1px}
+  .empty{text-align:center;color:var(--ink-soft);padding:50px 20px;font-size:14px;line-height:2}
+  .morebar{text-align:center;padding:4px 0 20px}
+  .morebar button{
+    font-family:inherit;font-size:14px;font-weight:700;
+    background:var(--card);border:1.5px solid var(--accent);color:var(--accent);
+    border-radius:12px;padding:10px 28px;cursor:pointer;
+  }
+
+  /* نمای FAT — دو سطحی */
+  #fatTree{padding:10px 12px 60px}
+  .fgroup{margin-bottom:8px}
+  .trow{
+    display:flex;align-items:center;gap:8px;
+    background:var(--card);border:1px solid var(--line);
+    border-radius:12px;padding:10px;cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .trow.root{background:linear-gradient(180deg,#fff,#f7fbfc);border-color:#cfe3e6}
+  .trow:active{border-color:var(--accent)}
+  .chev{
+    flex:none;width:26px;height:26px;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:8px;background:var(--bg);color:var(--ink-soft);transition:transform .15s;
+  }
+  .chev.open{transform:rotate(-90deg);background:var(--accent-soft);color:var(--accent)}
+  .chev.leaf{visibility:hidden}
+  .tlabel{
+    font-weight:800;font-size:14.5px;color:var(--fat);
+    direction:ltr;letter-spacing:.3px;flex:1;text-align:right;unicode-bidi:embed;
+  }
+  .trow.sub .tlabel{font-size:13.5px;font-weight:700}
+  .tcounts{display:flex;gap:5px;flex:none}
+  .cnt{font-size:11px;font-weight:700;border-radius:6px;padding:2px 7px}
+  .cnt.direct{background:var(--accent-soft);color:var(--accent)}
+  .cnt.total{background:var(--fat-bg);color:var(--fat)}
+  .tchildren{
+    margin-right:14px;border-right:2px solid var(--line);
+    padding-right:8px;margin-top:6px;
+    display:flex;flex-direction:column;gap:6px;
+  }
+
+  /* ---------- دیالوگ مشترکین ---------- */
+  .backdrop{
+    position:fixed;inset:0;z-index:60;
+    background:rgba(12,30,42,.5);
+    display:none;align-items:flex-end;justify-content:center;
+  }
+  .backdrop.open{display:flex}
+  .sheet{
+    background:var(--bg);
+    width:100%;max-width:560px;max-height:88vh;
+    border-radius:20px 20px 0 0;
+    display:flex;flex-direction:column;
+    animation:up .2s ease-out;
+  }
+  @keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+  .sheet-head{
+    padding:12px 14px 10px;
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:10px;
+    background:var(--card);border-radius:20px 20px 0 0;
+  }
+  .sheet-title{flex:1}
+  .sheet-title .k{
+    font-weight:800;font-size:16px;color:var(--fat);
+    direction:ltr;unicode-bidi:embed;display:block;text-align:right;
+  }
+  .sheet-title .s{font-size:12px;color:var(--ink-soft);margin-top:2px}
+  .sheet-close{
+    flex:none;width:34px;height:34px;border-radius:50%;
+    border:none;background:var(--bg);color:var(--ink-soft);
+    font-size:18px;cursor:pointer;line-height:1;
+  }
+  .sheet-body{overflow-y:auto;padding:10px 12px 22px;-webkit-overflow-scrolling:touch}
+  .mini{
+    display:flex;align-items:center;gap:10px;
+    background:var(--card);border:1px solid var(--line);
+    border-radius:11px;padding:10px 12px;margin-bottom:6px;
+    text-decoration:none;color:inherit;
+  }
+  .mini:active{background:var(--accent-soft)}
+  .mini .mport{
+    flex:none;min-width:30px;text-align:center;
+    background:var(--fat-bg);color:var(--fat);
+    font-size:13px;font-weight:800;
+    border-radius:8px;padding:4px 7px;direction:ltr;
+  }
+  .mini .mname{flex:1;font-size:14.5px;font-weight:700;min-width:0}
+  .mini .mphone{
+    flex:none;font-size:14px;font-weight:800;color:var(--accent);
+    direction:ltr;display:flex;align-items:center;gap:5px;
+  }
+  .sheet-body .nocust{
+    text-align:center;color:var(--ink-soft);
+    font-size:13.5px;padding:26px 10px;line-height:2;
+  }
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12h6"/><path d="M16 12h6"/><circle cx="12" cy="12" r="3.2"/><path d="M12 2v6.8M12 15.2V22" opacity=".5"/></svg>
+    جستجوی مشتریان فیبر نوری
+  </h1>
+  <div class="sub" id="subTitle">فایل اکسل را انتخاب کنید تا جستجو فعال شود</div>
+  <button id="reloadBtn">بارگذاری فایل جدید</button>
+</header>
+
+<div class="tabs" id="tabBar">
+  <button id="tabCust" class="active" onclick="switchTab('cust')">جستجوی مشترکین</button>
+  <button id="tabFat" onclick="switchTab('fat')">FAT ها</button>
+</div>
+
+<div class="loader" id="loaderBox">
+  <button class="pickBtn" onclick="document.getElementById('fileInput').click()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    انتخاب فایل اکسل
+  </button>
+  <p>فایل مشتریان (xlsx یا csv) را از حافظه گوشی انتخاب کنید.<br>اطلاعات فقط روی همین دستگاه باز می‌شود و جایی ارسال نمی‌شود.</p>
+  <div id="loadErr"></div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+</div>
+
+<!-- تب مشترکین -->
+<div id="custTab" style="display:none">
+  <div class="searchbar">
+    <div class="search-wrap">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+      <input id="q" type="search" placeholder="نام، تلفن، آدرس، FAT ..." autocomplete="off">
+      <button class="clear-x" id="clearBtn" aria-label="پاک کردن جستجو">✕</button>
+    </div>
+    <div class="filters">
+      <select id="fCity"><option value="">همه شهرها</option></select>
+      <select id="fStatus"><option value="">همه وضعیت‌ها</option></select>
+      <select id="fCenter"><option value="">همه مراکز</option></select>
+    </div>
+    <div class="count" id="countBox"></div>
+  </div>
+  <div id="list"></div>
+  <div class="morebar" id="moreBar" style="display:none"><button onclick="renderMore()">نمایش موارد بیشتر</button></div>
+</div>
+
+<!-- تب FAT -->
+<div id="fatTab" style="display:none">
+  <div class="searchbar">
+    <div class="search-wrap">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+      <input id="qf" type="search" placeholder="شماره FAT مثلاً 245 یا 245.2" autocomplete="off" inputmode="decimal">
+      <button class="clear-x" id="clearFatBtn" aria-label="پاک کردن جستجو">✕</button>
+    </div>
+    <div class="count" id="fatCountBox"></div>
+  </div>
+  <div id="fatTree"></div>
+</div>
+
+<!-- دیالوگ مشترکین FAT -->
+<div class="backdrop" id="sheetBack">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <div class="sheet-title">
+        <span class="k" id="sheetKey"></span>
+        <span class="s" id="sheetSub"></span>
+      </div>
+      <button class="sheet-close" id="sheetClose" aria-label="بستن">✕</button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</div>
+
+<script>
+let DATA = [], FILTERED = [], shown = 0, COLS = {};
+const PAGE = 40;
+
+/* نرمال‌سازی */
+const faDigits = '۰۱۲۳۴۵۶۷۸۹', arDigits = '٠١٢٣٤٥٦٧٨٩';
+function normalize(s){
+  if (s === null || s === undefined) return '';
+  s = String(s);
+  let out = '';
+  for (const ch of s){
+    let i = faDigits.indexOf(ch);
+    if (i > -1){ out += i; continue; }
+    i = arDigits.indexOf(ch);
+    if (i > -1){ out += i; continue; }
+    out += ch;
+  }
+  return out.replace(/[يى]/g,'ی').replace(/ك/g,'ک')
+    .replace(/[ًٌٍَُِّْـ]/g,'').replace(/\u200c/g,' ').toLowerCase().trim();
+}
+
+/* شناسایی ستون‌ها */
+function matchColumns(headers){
+  const find = (...keys) => {
+    for (const h of headers){
+      const n = normalize(h);
+      for (const k of keys) if (n.includes(normalize(k))) return h;
+    }
+    return null;
+  };
+  const cols = {
+    row:find('ردیف'), phone:find('شماره تلفن','تلفن سرویس','تلفن','شماره'),
+    name:find('نام مشترک','نام'), addr:find('آدرس'),
+    prov:find('استان'), city:find('شهر'), center:find('مرکز'), status:find('وضعیت'),
+    fat: headers.find(h => normalize(h) === 'fat') || find('fat'),
+    fatPort: find('fat port','fatport','پورت'),
+  };
+  if (cols.fat && cols.fat === cols.fatPort)
+    cols.fatPort = headers.find(h => h !== cols.fat && normalize(h).includes('port')) || null;
+  return cols;
+}
+
+/* بارگذاری فایل */
+document.getElementById('fileInput').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      const wb = XLSX.read(new Uint8Array(ev.target.result), {type:'array'});
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:''});
+      if (!rows.length) throw new Error('empty');
+      COLS = matchColumns(Object.keys(rows[0]));
+      DATA = rows.map(r => {
+        const g = c => c ? String(r[c] ?? '').trim() : '';
+        const item = {
+          row:g(COLS.row), phone:g(COLS.phone), name:g(COLS.name), addr:g(COLS.addr),
+          prov:g(COLS.prov), city:g(COLS.city), center:g(COLS.center), status:g(COLS.status),
+          fat:g(COLS.fat), fatPort:g(COLS.fatPort),
+        };
+        item._search = normalize(Object.values(item).join(' | '));
+        item._fatKey = normalize(item.fat).replace(/\s+/g,'').replace(/[،,]/g,'.').replace(/^\.+|\.+$/g,'');
+        return item;
+      });
+      buildGroups();
+      buildFilters();
+      document.getElementById('loaderBox').style.display = 'none';
+      document.getElementById('tabBar').style.display = 'flex';
+      document.getElementById('reloadBtn').style.display = 'inline';
+      document.getElementById('subTitle').textContent = DATA.length.toLocaleString('fa-IR') + ' مشترک بارگذاری شد';
+      switchTab('cust');
+      applyFilter();
+    }catch(err){
+      const el = document.getElementById('loadErr');
+      el.style.display = 'block';
+      el.textContent = 'فایل خوانده نشد. مطمئن شوید فایل اکسل معتبر است و ردیف اول آن نام ستون‌هاست.';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+document.getElementById('reloadBtn').addEventListener('click', () => {
+  document.getElementById('fileInput').value = '';
+  document.getElementById('fileInput').click();
+});
+
+function switchTab(t){
+  closeSheet();
+  document.getElementById('custTab').style.display = t === 'cust' ? 'block' : 'none';
+  document.getElementById('fatTab').style.display  = t === 'fat'  ? 'block' : 'none';
+  document.getElementById('tabCust').classList.toggle('active', t === 'cust');
+  document.getElementById('tabFat').classList.toggle('active', t === 'fat');
+  if (t === 'fat') renderTree();
+}
+
+/* فیلترها */
+function buildFilters(){
+  fillSelect('fCity', DATA.map(d=>d.city));
+  fillSelect('fStatus', DATA.map(d=>d.status));
+  fillSelect('fCenter', DATA.map(d=>d.center));
+}
+function fillSelect(id, values){
+  const sel = document.getElementById(id);
+  sel.length = 1;
+  [...new Set(values.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'fa')).forEach(v=>{
+    const o = document.createElement('option');
+    o.value = o.textContent = v;
+    sel.appendChild(o);
+  });
+}
+
+/* جستجوی مشترکین */
+let debounce;
+document.getElementById('q').addEventListener('input', () => {
+  document.getElementById('clearBtn').style.display = document.getElementById('q').value ? 'block' : 'none';
+  clearTimeout(debounce);
+  debounce = setTimeout(applyFilter, 120);
+});
+document.getElementById('clearBtn').addEventListener('click', () => {
+  const q = document.getElementById('q');
+  q.value = ''; q.focus();
+  document.getElementById('clearBtn').style.display = 'none';
+  applyFilter();
+});
+['fCity','fStatus','fCenter'].forEach(id =>
+  document.getElementById(id).addEventListener('change', applyFilter));
+
+function applyFilter(){
+  const terms = normalize(document.getElementById('q').value).split(/\s+/).filter(Boolean);
+  const city = document.getElementById('fCity').value;
+  const status = document.getElementById('fStatus').value;
+  const center = document.getElementById('fCenter').value;
+  FILTERED = DATA.filter(d =>
+    (!city || d.city === city) && (!status || d.status === status) &&
+    (!center || d.center === center) && terms.every(t => d._search.includes(t)));
+  shown = 0;
+  document.getElementById('list').innerHTML = '';
+  renderMore();
+  document.getElementById('countBox').innerHTML = FILTERED.length
+    ? '<b>' + FILTERED.length.toLocaleString('fa-IR') + '</b> نتیجه از ' + DATA.length.toLocaleString('fa-IR') + ' مشترک'
+    : 'نتیجه‌ای پیدا نشد';
+}
+
+/* کارت مشترک */
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function hl(s){
+  const terms = normalize(document.getElementById('q').value).split(/\s+/).filter(Boolean);
+  if (!terms.length || !s) return esc(s);
+  const ns = normalize(s), marks = new Array(s.length).fill(false);
+  for (const t of terms){
+    let idx = ns.indexOf(t);
+    while (idx > -1){
+      for (let i = idx; i < Math.min(idx + t.length, s.length); i++) marks[i] = true;
+      idx = ns.indexOf(t, idx + 1);
+    }
+  }
+  let out = '', open = false;
+  for (let i = 0; i < s.length; i++){
+    if (marks[i] && !open){ out += '<mark>'; open = true; }
+    if (!marks[i] && open){ out += '</mark>'; open = false; }
+    out += esc(s[i]);
+  }
+  return open ? out + '</mark>' : out;
+}
+function statusClass(st){
+  const n = normalize(st);
+  if (/فعال|دایر|وصل|برقرار|نصب شد/.test(n)) return 'ok';
+  if (/قطع|لغو|جمع|مسدود|انصراف/.test(n)) return 'bad';
+  if (/انتظار|بررسی|رزرو|معلق|در حال/.test(n)) return 'warn';
+  return '';
+}
+function telOf(p){ return normalize(p).replace(/[^\d+]/g,''); }
+function customerCardHTML(d){
+  return '<div class="card">' +
+    '<div class="top">' +
+      '<div class="name">' + (hl(d.name) || 'بدون نام') + '</div>' +
+      (d.status ? '<span class="badge ' + statusClass(d.status) + '">' + hl(d.status) + '</span>' : '') +
+      (d.row ? '<div class="row-num">' + esc(d.row) + '</div>' : '') +
+    '</div>' +
+    '<div class="line2">' +
+      (d.phone ? '<a class="phone" href="tel:' + telOf(d.phone) + '">' + phoneIcon(13) + hl(d.phone) + '</a>' : '') +
+      (d.fat ? '<span class="fatchip"><small>FAT </small>' + hl(d.fat) + '</span>' : '') +
+      (d.fatPort ? '<span class="fatchip"><small>P </small>' + hl(d.fatPort) + '</span>' : '') +
+    '</div>' +
+    (d.addr ? '<div class="addr">' + hl(d.addr) + '</div>' : '') +
+    '<div class="geo">' +
+      (d.prov ? '<span>' + hl(d.prov) + '</span>' : '') +
+      (d.city ? '<span>' + hl(d.city) + '</span>' : '') +
+      (d.center ? '<span>مرکز: ' + hl(d.center) + '</span>' : '') +
+    '</div></div>';
+}
+function phoneIcon(sz){
+  return '<svg width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.4 2.1L8.1 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.6 1.9z"/></svg>';
+}
+function renderMore(){
+  const list = document.getElementById('list');
+  if (!FILTERED.length && shown === 0){
+    list.innerHTML = '<div class="empty">چیزی مطابق جستجوی شما پیدا نشد.<br>املا یا فیلترها را بررسی کنید.</div>';
+    document.getElementById('moreBar').style.display = 'none';
+    return;
+  }
+  let html = '';
+  const end = Math.min(shown + PAGE, FILTERED.length);
+  for (let i = shown; i < end; i++) html += customerCardHTML(FILTERED[i]);
+  list.insertAdjacentHTML('beforeend', html);
+  shown = end;
+  document.getElementById('moreBar').style.display = shown < FILTERED.length ? 'block' : 'none';
+}
+
+/* ================= نمای FAT (دو سطحی) ================= */
+let GROUPS = [];
+let EXPANDED = new Set();
+
+function buildGroups(){
+  const map = new Map();
+  for (const d of DATA){
+    if (!d._fatKey) continue;
+    const parts = d._fatKey.split('.').filter(Boolean);
+    if (!parts.length) continue;
+    const root = parts[0];
+    if (!map.has(root)) map.set(root, {root, direct:[], subMap:new Map()});
+    const g = map.get(root);
+    if (parts.length === 1) g.direct.push(d);
+    else {
+      const key = parts.join('.');
+      if (!g.subMap.has(key)) g.subMap.set(key, []);
+      g.subMap.get(key).push(d);
+    }
+  }
+  GROUPS = [...map.values()].map(g => {
+    const subs = [...g.subMap.entries()].map(([key, custs]) => ({key, custs}))
+      .sort((a,b) => cmpKey(a.key, b.key));
+    const total = g.direct.length + subs.reduce((s,x)=>s+x.custs.length, 0);
+    return {root:g.root, direct:g.direct, subs, total};
+  }).sort((a,b) => cmpKey(a.root, b.root));
+  EXPANDED = new Set();
+}
+function cmpKey(a, b){
+  const pa = a.split('.'), pb = b.split('.');
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++){
+    const x = pa[i], y = pb[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    const nx = parseFloat(x), ny = parseFloat(y);
+    if (!isNaN(nx) && !isNaN(ny)){ if (nx !== ny) return nx - ny; }
+    else { const c = String(x).localeCompare(String(y)); if (c) return c; }
+  }
+  return 0;
+}
+
+let fatDebounce;
+document.getElementById('qf').addEventListener('input', () => {
+  document.getElementById('clearFatBtn').style.display = document.getElementById('qf').value ? 'block' : 'none';
+  clearTimeout(fatDebounce);
+  fatDebounce = setTimeout(renderTree, 120);
+});
+document.getElementById('clearFatBtn').addEventListener('click', () => {
+  const q = document.getElementById('qf');
+  q.value = ''; q.focus();
+  document.getElementById('clearFatBtn').style.display = 'none';
+  renderTree();
+});
+
+function renderTree(){
+  const box = document.getElementById('fatTree');
+  const q = normalize(document.getElementById('qf').value).replace(/\s+/g,'');
+  box.innerHTML = '';
+  if (!GROUPS.length){
+    box.innerHTML = '<div class="empty">ستون FAT در فایل پیدا نشد یا خالی است.</div>';
+    document.getElementById('fatCountBox').textContent = '';
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  let count = 0;
+  for (const g of GROUPS){
+    const rootHit = !q || g.root.includes(q);
+    const subHits = q ? g.subs.filter(s => s.key.includes(q)) : g.subs;
+    if (q && !rootHit && !subHits.length) continue;
+    count++;
+    frag.appendChild(renderGroup(g, q, rootHit ? g.subs : subHits));
+  }
+  box.appendChild(frag);
+  if (!count)
+    box.innerHTML = '<div class="empty">هیچ FAT ای مطابق «' + esc(document.getElementById('qf').value) + '» پیدا نشد.</div>';
+  document.getElementById('fatCountBox').innerHTML =
+    '<b>' + count.toLocaleString('fa-IR') + '</b> FAT اصلی' +
+    (q ? ' مطابق جستجو' : ' — فلش: باز کردن SFAT ها | نام: نمایش لیست مشترکین');
+}
+
+function renderGroup(g, q, visibleSubs){
+  const wrap = document.createElement('div');
+  wrap.className = 'fgroup';
+  const hasSubs = visibleSubs.length > 0;
+  const isOpen = q ? hasSubs : EXPANDED.has(g.root);
+
+  const row = document.createElement('div');
+  row.className = 'trow root';
+  row.innerHTML =
+    '<span class="chev ' + (hasSubs ? (isOpen ? 'open' : '') : 'leaf') + '">' +
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span>' +
+    '<span class="tlabel">' + hlFat(g.root, q) +
+      (hasSubs ? ' <small style="opacity:.6;font-weight:600">(' + g.subs.length.toLocaleString('fa-IR') + ' SFAT)</small>' : '') + '</span>' +
+    '<span class="tcounts">' +
+      (g.direct.length ? '<span class="cnt direct">' + g.direct.length.toLocaleString('fa-IR') + ' مستقیم</span>' : '') +
+      '<span class="cnt total">' + g.total.toLocaleString('fa-IR') + ' کل</span></span>';
+
+  row.querySelector('.chev').addEventListener('click', e => {
+    e.stopPropagation();
+    if (!hasSubs) return;
+    EXPANDED.has(g.root) ? EXPANDED.delete(g.root) : EXPANDED.add(g.root);
+    renderTree();
+  });
+  row.addEventListener('click', () => {
+    openSheet('FAT ' + g.root, g.direct,
+      'مشترکین مستقیم این FAT' + (g.total > g.direct.length
+        ? ' — ' + g.total.toLocaleString('fa-IR') + ' مشترک با احتساب SFAT ها' : ''),
+      'روی FAT ' + g.root + ' مشترک مستقیمی ثبت نشده است.');
+  });
+  wrap.appendChild(row);
+
+  if (hasSubs && isOpen){
+    const kids = document.createElement('div');
+    kids.className = 'tchildren';
+    for (const s of visibleSubs){
+      const srow = document.createElement('div');
+      srow.className = 'trow sub';
+      srow.innerHTML =
+        '<span class="chev leaf"></span>' +
+        '<span class="tlabel">' + hlFat(s.key, q) + '</span>' +
+        '<span class="tcounts"><span class="cnt direct">' + s.custs.length.toLocaleString('fa-IR') + ' مشترک</span></span>';
+      srow.addEventListener('click', () =>
+        openSheet('SFAT ' + s.key, s.custs, 'زیرمجموعه FAT ' + g.root, 'مشترکی روی این SFAT نیست.'));
+      kids.appendChild(srow);
+    }
+    wrap.appendChild(kids);
+  }
+  return wrap;
+}
+
+function hlFat(key, q){
+  if (!q) return esc(key);
+  const idx = key.indexOf(q);
+  if (idx < 0) return esc(key);
+  return esc(key.slice(0, idx)) + '<mark>' + esc(key.slice(idx, idx + q.length)) + '</mark>' + esc(key.slice(idx + q.length));
+}
+
+/* ---------- دیالوگ: فقط نام و شماره اشتراک ---------- */
+const back = document.getElementById('sheetBack');
+function openSheet(title, custs, sub, emptyMsg){
+  document.getElementById('sheetKey').textContent = title;
+  document.getElementById('sheetSub').textContent =
+    custs.length ? custs.length.toLocaleString('fa-IR') + ' مشترک (مرتب بر اساس پورت) — ' + sub : sub;
+  const body = document.getElementById('sheetBody');
+  if (!custs.length){
+    body.innerHTML = '<div class="nocust">' + esc(emptyMsg) + '</div>';
+  } else {
+    let html = '';
+    const sorted = custs.slice().sort((a,b) => {
+      const na = parseFloat(normalize(a.fatPort)), nb = parseFloat(normalize(b.fatPort));
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      if (!isNaN(na)) return -1;
+      if (!isNaN(nb)) return 1;
+      return 0;
+    });
+    for (const d of sorted){
+      html += '<a class="mini" href="tel:' + telOf(d.phone) + '">' +
+        '<span class="mport">' + (d.fatPort ? esc(d.fatPort) : '—') + '</span>' +
+        '<span class="mname">' + esc(d.name || 'بدون نام') + '</span>' +
+        (d.phone ? '<span class="mphone">' + phoneIcon(13) + esc(d.phone) + '</span>' : '') +
+      '</a>';
+    }
+    body.innerHTML = html;
+  }
+  body.scrollTop = 0;
+  back.classList.add('open');
+  document.body.classList.add('locked');
+}
+function closeSheet(){
+  back.classList.remove('open');
+  document.body.classList.remove('locked');
+}
+document.getElementById('sheetClose').addEventListener('click', closeSheet);
+back.addEventListener('click', e => { if (e.target === back) closeSheet(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+</script>
+</body>
+</html>
