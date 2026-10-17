@@ -334,8 +334,6 @@ function matchColumns(headers){
     prov:find('استان'), city:find('شهر'), center:find('مرکز'), status:find('وضعیت'),
     fat: headers.find(h => normalize(h) === 'fat') || find('fat'),
     fatPort: find('fat port','fatport','پورت'),
-    olt: headers.find(h => normalize(h) === 'olt') ||
-      headers.find(h => /olt/.test(normalize(h)) && !/port|slot|pon|پورت/.test(normalize(h))) || null,
   };
   if (cols.fat && cols.fat === cols.fatPort)
     cols.fatPort = headers.find(h => h !== cols.fat && normalize(h).includes('port')) || null;
@@ -358,7 +356,7 @@ document.getElementById('fileInput').addEventListener('change', function(e){
         const item = {
           row:g(COLS.row), phone:g(COLS.phone), name:g(COLS.name), addr:g(COLS.addr),
           prov:g(COLS.prov), city:g(COLS.city), center:g(COLS.center), status:g(COLS.status),
-          fat:g(COLS.fat), fatPort:g(COLS.fatPort), olt:g(COLS.olt),
+          fat:g(COLS.fat), fatPort:g(COLS.fatPort),
         };
         item._search = normalize(Object.values(item).join(' | '));
         item._fatKey = normalize(item.fat).replace(/\s+/g,'').replace(/[،,]/g,'.').replace(/^\.+|\.+$/g,'');
@@ -482,7 +480,6 @@ function customerCardHTML(d){
       (d.phone ? '<a class="phone" href="tel:' + telOf(d.phone) + '">' + phoneIcon(13) + hl(d.phone) + '</a>' : '') +
       (d.fat ? '<span class="fatchip"><small>FAT </small>' + hl(d.fat) + '</span>' : '') +
       (d.fatPort ? '<span class="fatchip"><small>P </small>' + hl(d.fatPort) + '</span>' : '') +
-      (d.olt ? '<span class="fatchip"><small>OLT </small>' + hl(d.olt) + '</span>' : '') +
     '</div>' +
     (d.addr ? '<div class="addr">' + hl(d.addr) + '</div>' : '') +
     '<div class="geo">' +
@@ -513,18 +510,14 @@ function renderMore(){
 let GROUPS = [];
 let EXPANDED = new Set();
 
-/* FAT های هم‌نام در OLT های مختلف، FAT های جدا هستند؛
-   اگر ستون OLT نباشد، مرکز ملاک جداسازی است */
-function oltOf(d){ return COLS.olt ? d.olt : d.center; }
-function oltLabel(){ return COLS.olt ? 'OLT' : 'مرکز'; }
-
+/* FAT های هم‌نام در OLT های مختلف (ستون مرکز)، FAT های جدا هستند */
 function buildGroups(){
   const map = new Map();
   for (const d of DATA){
     if (!d._fatKey) continue;
     const parts = d._fatKey.split('.').filter(Boolean);
     if (!parts.length) continue;
-    const root = parts[0], olt = oltOf(d);
+    const root = parts[0], olt = d.center;
     const id = olt + '\u0000' + root;
     if (!map.has(id)) map.set(id, {id, root, olt, direct:[], subMap:new Map()});
     const g = map.get(id);
@@ -544,7 +537,6 @@ function buildGroups(){
   EXPANDED = new Set();
   const olts = [...new Set(GROUPS.map(g => g.olt))];
   fillSelect('fOlt', olts);
-  document.getElementById('fOlt').options[0].textContent = COLS.olt ? 'همه OLT ها' : 'همه مراکز';
   document.getElementById('fOlt').value = '';
   document.getElementById('fatFilters').style.display = olts.filter(Boolean).length > 1 ? 'flex' : 'none';
 }
@@ -609,7 +601,7 @@ function renderGroup(g, q, visibleSubs){
   wrap.className = 'fgroup';
   const hasSubs = visibleSubs.length > 0;
   const isOpen = q ? hasSubs : EXPANDED.has(g.id);
-  const oltTag = g.olt ? ' — ' + oltLabel() + ' ' + g.olt : '';
+  const oltTag = g.olt ? ' — OLT ' + g.olt : '';
 
   const row = document.createElement('div');
   row.className = 'trow root';
