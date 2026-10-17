@@ -151,6 +151,10 @@
     direction:ltr;letter-spacing:.3px;flex:1;text-align:right;unicode-bidi:embed;
   }
   .trow.sub .tlabel{font-size:13.5px;font-weight:700}
+  .oltchip{
+    flex:none;font-size:11px;font-weight:700;border-radius:6px;padding:2px 7px;
+    background:var(--warn-bg);color:var(--warn);direction:ltr;unicode-bidi:embed;
+  }
   .tcounts{display:flex;gap:5px;flex:none}
   .cnt{font-size:11px;font-weight:700;border-radius:6px;padding:2px 7px}
   .cnt.direct{background:var(--accent-soft);color:var(--accent)}
@@ -272,6 +276,9 @@
       <input id="qf" type="search" placeholder="شماره FAT مثلاً 245 یا 245.2" autocomplete="off" inputmode="decimal">
       <button class="clear-x" id="clearFatBtn" aria-label="پاک کردن جستجو">✕</button>
     </div>
+    <div class="filters" id="fatFilters" style="display:none">
+      <select id="fOlt"><option value="">همه OLT ها</option></select>
+    </div>
     <div class="count" id="fatCountBox"></div>
   </div>
   <div id="fatTree"></div>
@@ -327,6 +334,8 @@ function matchColumns(headers){
     prov:find('استان'), city:find('شهر'), center:find('مرکز'), status:find('وضعیت'),
     fat: headers.find(h => normalize(h) === 'fat') || find('fat'),
     fatPort: find('fat port','fatport','پورت'),
+    olt: headers.find(h => normalize(h) === 'olt') ||
+      headers.find(h => /olt/.test(normalize(h)) && !/port|slot|pon|پورت/.test(normalize(h))) || null,
   };
   if (cols.fat && cols.fat === cols.fatPort)
     cols.fatPort = headers.find(h => h !== cols.fat && normalize(h).includes('port')) || null;
@@ -349,7 +358,7 @@ document.getElementById('fileInput').addEventListener('change', function(e){
         const item = {
           row:g(COLS.row), phone:g(COLS.phone), name:g(COLS.name), addr:g(COLS.addr),
           prov:g(COLS.prov), city:g(COLS.city), center:g(COLS.center), status:g(COLS.status),
-          fat:g(COLS.fat), fatPort:g(COLS.fatPort),
+          fat:g(COLS.fat), fatPort:g(COLS.fatPort), olt:g(COLS.olt),
         };
         item._search = normalize(Object.values(item).join(' | '));
         item._fatKey = normalize(item.fat).replace(/\s+/g,'').replace(/[،,]/g,'.').replace(/^\.+|\.+$/g,'');
@@ -473,6 +482,7 @@ function customerCardHTML(d){
       (d.phone ? '<a class="phone" href="tel:' + telOf(d.phone) + '">' + phoneIcon(13) + hl(d.phone) + '</a>' : '') +
       (d.fat ? '<span class="fatchip"><small>FAT </small>' + hl(d.fat) + '</span>' : '') +
       (d.fatPort ? '<span class="fatchip"><small>P </small>' + hl(d.fatPort) + '</span>' : '') +
+      (d.olt ? '<span class="fatchip"><small>OLT </small>' + hl(d.olt) + '</span>' : '') +
     '</div>' +
     (d.addr ? '<div class="addr">' + hl(d.addr) + '</div>' : '') +
     '<div class="geo">' +
@@ -503,15 +513,21 @@ function renderMore(){
 let GROUPS = [];
 let EXPANDED = new Set();
 
+/* FAT های هم‌نام در OLT های مختلف، FAT های جدا هستند؛
+   اگر ستون OLT نباشد، مرکز ملاک جداسازی است */
+function oltOf(d){ return COLS.olt ? d.olt : d.center; }
+function oltLabel(){ return COLS.olt ? 'OLT' : 'مرکز'; }
+
 function buildGroups(){
   const map = new Map();
   for (const d of DATA){
     if (!d._fatKey) continue;
     const parts = d._fatKey.split('.').filter(Boolean);
     if (!parts.length) continue;
-    const root = parts[0];
-    if (!map.has(root)) map.set(root, {root, direct:[], subMap:new Map()});
-    const g = map.get(root);
+    const root = parts[0], olt = oltOf(d);
+    const id = olt + '\u0000' + root;
+    if (!map.has(id)) map.set(id, {id, root, olt, direct:[], subMap:new Map()});
+    const g = map.get(id);
     if (parts.length === 1) g.direct.push(d);
     else {
       const key = parts.join('.');
@@ -523,9 +539,14 @@ function buildGroups(){
     const subs = [...g.subMap.entries()].map(([key, custs]) => ({key, custs}))
       .sort((a,b) => cmpKey(a.key, b.key));
     const total = g.direct.length + subs.reduce((s,x)=>s+x.custs.length, 0);
-    return {root:g.root, direct:g.direct, subs, total};
-  }).sort((a,b) => cmpKey(a.root, b.root));
+    return {id:g.id, root:g.root, olt:g.olt, direct:g.direct, subs, total};
+  }).sort((a,b) => cmpKey(a.root, b.root) || a.olt.localeCompare(b.olt, 'fa'));
   EXPANDED = new Set();
+  const olts = [...new Set(GROUPS.map(g => g.olt))];
+  fillSelect('fOlt', olts);
+  document.getElementById('fOlt').options[0].textContent = COLS.olt ? 'همه OLT ها' : 'همه مراکز';
+  document.getElementById('fOlt').value = '';
+  document.getElementById('fatFilters').style.display = olts.filter(Boolean).length > 1 ? 'flex' : 'none';
 }
 function cmpKey(a, b){
   const pa = a.split('.'), pb = b.split('.');
@@ -552,10 +573,12 @@ document.getElementById('clearFatBtn').addEventListener('click', () => {
   document.getElementById('clearFatBtn').style.display = 'none';
   renderTree();
 });
+document.getElementById('fOlt').addEventListener('change', renderTree);
 
 function renderTree(){
   const box = document.getElementById('fatTree');
   const q = normalize(document.getElementById('qf').value).replace(/\s+/g,'');
+  const olt = document.getElementById('fOlt').value;
   box.innerHTML = '';
   if (!GROUPS.length){
     box.innerHTML = '<div class="empty">ستون FAT در فایل پیدا نشد یا خالی است.</div>';
@@ -565,6 +588,7 @@ function renderTree(){
   const frag = document.createDocumentFragment();
   let count = 0;
   for (const g of GROUPS){
+    if (olt && g.olt !== olt) continue;
     const rootHit = !q || g.root.includes(q);
     const subHits = q ? g.subs.filter(s => s.key.includes(q)) : g.subs;
     if (q && !rootHit && !subHits.length) continue;
@@ -573,17 +597,19 @@ function renderTree(){
   }
   box.appendChild(frag);
   if (!count)
-    box.innerHTML = '<div class="empty">هیچ FAT ای مطابق «' + esc(document.getElementById('qf').value) + '» پیدا نشد.</div>';
+    box.innerHTML = '<div class="empty">هیچ FAT ای' +
+      (q ? ' مطابق «' + esc(document.getElementById('qf').value) + '»' : '') + ' پیدا نشد.</div>';
   document.getElementById('fatCountBox').innerHTML =
     '<b>' + count.toLocaleString('fa-IR') + '</b> FAT اصلی' +
-    (q ? ' مطابق جستجو' : ' — فلش: باز کردن SFAT ها | نام: نمایش لیست مشترکین');
+    (q || olt ? ' مطابق جستجو' : ' — فلش: باز کردن SFAT ها | نام: نمایش لیست مشترکین');
 }
 
 function renderGroup(g, q, visibleSubs){
   const wrap = document.createElement('div');
   wrap.className = 'fgroup';
   const hasSubs = visibleSubs.length > 0;
-  const isOpen = q ? hasSubs : EXPANDED.has(g.root);
+  const isOpen = q ? hasSubs : EXPANDED.has(g.id);
+  const oltTag = g.olt ? ' — ' + oltLabel() + ' ' + g.olt : '';
 
   const row = document.createElement('div');
   row.className = 'trow root';
@@ -592,6 +618,7 @@ function renderGroup(g, q, visibleSubs){
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span>' +
     '<span class="tlabel">' + hlFat(g.root, q) +
       (hasSubs ? ' <small style="opacity:.6;font-weight:600">(' + g.subs.length.toLocaleString('fa-IR') + ' SFAT)</small>' : '') + '</span>' +
+    (g.olt ? '<span class="oltchip">' + esc(g.olt) + '</span>' : '') +
     '<span class="tcounts">' +
       (g.direct.length ? '<span class="cnt direct">' + g.direct.length.toLocaleString('fa-IR') + ' مستقیم</span>' : '') +
       '<span class="cnt total">' + g.total.toLocaleString('fa-IR') + ' کل</span></span>';
@@ -599,12 +626,12 @@ function renderGroup(g, q, visibleSubs){
   row.querySelector('.chev').addEventListener('click', e => {
     e.stopPropagation();
     if (!hasSubs) return;
-    EXPANDED.has(g.root) ? EXPANDED.delete(g.root) : EXPANDED.add(g.root);
+    EXPANDED.has(g.id) ? EXPANDED.delete(g.id) : EXPANDED.add(g.id);
     renderTree();
   });
   row.addEventListener('click', () => {
     openSheet('FAT ' + g.root, g.direct,
-      'مشترکین مستقیم این FAT' + (g.total > g.direct.length
+      'مشترکین مستقیم این FAT' + oltTag + (g.total > g.direct.length
         ? ' — ' + g.total.toLocaleString('fa-IR') + ' مشترک با احتساب SFAT ها' : ''),
       'روی FAT ' + g.root + ' مشترک مستقیمی ثبت نشده است.');
   });
@@ -621,7 +648,7 @@ function renderGroup(g, q, visibleSubs){
         '<span class="tlabel">' + hlFat(s.key, q) + '</span>' +
         '<span class="tcounts"><span class="cnt direct">' + s.custs.length.toLocaleString('fa-IR') + ' مشترک</span></span>';
       srow.addEventListener('click', () =>
-        openSheet('SFAT ' + s.key, s.custs, 'زیرمجموعه FAT ' + g.root, 'مشترکی روی این SFAT نیست.'));
+        openSheet('SFAT ' + s.key, s.custs, 'زیرمجموعه FAT ' + g.root + oltTag, 'مشترکی روی این SFAT نیست.'));
       kids.appendChild(srow);
     }
     wrap.appendChild(kids);
